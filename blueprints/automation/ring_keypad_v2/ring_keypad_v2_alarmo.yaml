@@ -1,0 +1,667 @@
+---
+# Ring Keypad v2 <-> Alarmo
+#
+# Personal fork of https://github.com/ImSorryButWho/HomeAssistantNotes
+# (keypad_blueprint.yaml, upstream main @ 375e1d0, 2025-08-09).
+#
+# Requires Home Assistant 2024.10 or newer (modern `triggers:` / `actions:` /
+# `action:` syntax and the `sequence:` grouping action).
+#
+# See README.md in this repo for the full rationale behind every change.
+
+blueprint:
+  name: Ring Keypad v2 + Alarmo (Eduardo's build)
+  description: >-
+    Two-way sync between a **Ring Alarm Keypad v2** (Z-Wave JS) and an
+    **Alarmo** alarm control panel.
+
+
+    Arm and disarm from the keypad; Alarmo's state drives the keypad's LEDs,
+    voice prompts, entry/exit countdowns and siren.
+
+
+    Changes over the upstream blueprint:
+
+    - Only reacts to `alarmo_failed_to_arm` events for *this* panel (upstream PR #43)
+
+    - Working sensor-bypass confirmation with a configurable window (upstream issue #23)
+
+    - Handles the **Cancel** key, which upstream ignores entirely
+
+    - **Disarm**/**Cancel** clears a manually triggered Fire/Police/Medical alert (upstream issue #45 / #21)
+
+    - Handles `armed_night`, `armed_vacation` and `armed_custom_bypass`
+
+    - Selectable entry/exit-delay indicator format for older Z-Wave JS (upstream issue #44)
+
+    - Optional volume restore after an alarm (upstream issue #35)
+
+
+    Keypad volume, LED brightness and voice language are *not* set here — they
+    are Z-Wave device config parameters. Set them in Settings > Devices >
+    your keypad > Z-Wave device config (parameters 4/5/6 volumes,
+    12/13/14 brightness, 18 language).
+  domain: automation
+  # Must match this file's real location, or Home Assistant refuses the import.
+  source_url: https://github.com/evancauteren/ring-keypad-alarmo-blueprint/blob/main/blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml
+  input:
+    devices:
+      name: Devices
+      icon: mdi:dialpad
+      input:
+        keypad:
+          name: Keypad device
+          description: The Ring Keypad v2 device entry, as paired through Z-Wave JS.
+          selector:
+            device:
+              filter:
+                # Deliberately NOT filtered on manufacturer: some keypads are
+                # reported without a usable manufacturer name and then never
+                # show up in the picker (upstream issue #32).
+                - integration: zwave_js
+        alarm:
+          name: Alarm control panel
+          description: The Alarmo entity to keep in sync with the keypad.
+          selector:
+            entity:
+              filter:
+                - domain: alarm_control_panel
+                  integration: alarmo
+
+    behaviour:
+      name: Behaviour
+      icon: mdi:tune
+      collapsed: true
+      input:
+        bypass_confirm_timeout:
+          name: Bypass confirmation window
+          description: >-
+            When Alarmo refuses to arm because sensors are open, the keypad says
+            "Sensors require bypass". This is how long you then have to press
+            Enter (or Arm again) to force-arm anyway. Upstream hard-coded 5
+            seconds, which is why bypass never worked in practice.
+          default: 30
+          selector:
+            number:
+              min: 5
+              max: 120
+              step: 5
+              unit_of_measurement: seconds
+              mode: slider
+        require_code_to_cancel:
+          name: Require a code to clear a panic alert
+          description: >-
+            When on, a Fire/Police/Medical alert raised from the keypad can only
+            be silenced by entering a code and then pressing Disarm or Cancel.
+            When off, a bare Disarm/Cancel press is enough.
+          default: true
+          selector:
+            boolean:
+        delay_property_key:
+          name: Entry/exit delay indicator format
+          description: >-
+            How the countdown duration is sent to the keypad. Modern Z-Wave JS
+            uses the "timeout" property key with a duration string (0m30s).
+            Older versions exposed property key 7 with a plain number of
+            seconds. Switch to the legacy format if your entry/exit countdown
+            sounds and light bar stopped working.
+          default: timeout
+          selector:
+            select:
+              options:
+                - label: 'Modern: "timeout" (e.g. 0m30s)'
+                  value: timeout
+                - label: "Legacy: property key 7 (seconds)"
+                  value: "7"
+
+    volume_recovery:
+      name: Volume recovery (optional)
+      icon: mdi:volume-high
+      collapsed: true
+      input:
+        restore_volume_enabled:
+          name: Re-assert announcement volume after an alarm
+          description: >-
+            Some keypads come back from a siren with their announcement volume
+            stuck low (upstream issue #35). When on, this writes Z-Wave config
+            parameter 4 back to the value below once the alarm is disarmed
+            after having been triggered. Leave off unless you actually see the
+            problem.
+          default: false
+          selector:
+            boolean:
+        announcement_volume:
+          name: Announcement volume to restore
+          description: Z-Wave config parameter 4. Only used when the option above is on.
+          default: 7
+          selector:
+            number:
+              min: 0
+              max: 10
+              step: 1
+              mode: slider
+
+    panic_actions:
+      name: Panic button actions
+      icon: mdi:alarm-light
+      collapsed: true
+      input:
+        selected_action_police:
+          name: Police button held
+          description: Runs when the Police button is held until all three lights go out.
+          default: []
+          selector:
+            action:
+        selected_action_fire:
+          name: Fire button held
+          description: Runs when the Fire button is held until all three lights go out.
+          default: []
+          selector:
+            action:
+        selected_action_medical:
+          name: Medical button held
+          description: Runs when the Medical button is held until all three lights go out.
+          default: []
+          selector:
+            action:
+        selected_action_cancel:
+          name: Panic alert cleared
+          description: >-
+            Runs when a panic alert is cleared from the keypad (Disarm or
+            Cancel pressed while the alarm is already disarmed). Use it to stop
+            whatever the panic buttons above started - sirens, notifications.
+          default: []
+          selector:
+            action:
+
+mode: parallel
+max: 10
+
+# Traces are disabled on purpose: an automation trace of this blueprint would
+# store the PIN entered on the keypad in plain text under .storage. Raise this
+# temporarily if you need to debug, then set it back to 0.
+trace:
+  stored_traces: 0
+
+variables:
+  alarm: !input alarm
+  delay_property_key: !input delay_property_key
+  require_code_to_cancel: !input require_code_to_cancel
+  restore_volume_enabled: !input restore_volume_enabled
+  bypass_confirm_timeout: !input bypass_confirm_timeout
+  # The code typed on the keypad before the button press, or "" if none.
+  # Guarded with `'event' in trigger` so it stays safe on state triggers.
+  entered_code: >-
+    {% if 'event' in trigger %}
+      {% set c = trigger.event.data.event_data %}
+      {% if c is not none %}{{ c | string | trim }}{% endif %}
+    {% endif %}
+  # True when a Disarm/Cancel press should silence a manually raised
+  # Fire/Police/Medical alert rather than disarm anything.
+  panic_cancel_requested: >-
+    {{ trigger.id in ['keypad_disarm', 'keypad_cancel']
+       and states(alarm) == 'disarmed'
+       and ((not require_code_to_cancel) or ((entered_code | string) != '')) }}
+  # Alarmo exposes the running delay on the entity as the `delay` attribute.
+  delay_indicator_value: >-
+    {% set d = state_attr(alarm, 'delay') | int(0) %}
+    {% if delay_property_key == '7' %}{{ d }}{% else %}{{ d // 60 }}m{{ d % 60 }}s{% endif %}
+
+triggers:
+  # ---------------------------------------------------------------- keypad keys
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 2
+    id: code_entered
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 3
+    id: keypad_disarm
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 5
+    id: keypad_arm_away
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 6
+    id: keypad_arm_home
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 25
+    id: keypad_cancel
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 16
+    id: keypad_fire
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 17
+    id: keypad_police
+  - trigger: event
+    event_type: zwave_js_notification
+    event_data:
+      command_class: 111
+      device_id: !input keypad
+      event_type: 19
+    id: keypad_medical
+
+  # --------------------------------------------------------- Alarmo rejections
+  # `entity_id` scopes these to the selected panel only (upstream PR #43).
+  - trigger: event
+    event_type: alarmo_failed_to_arm
+    event_data:
+      entity_id: !input alarm
+      reason: invalid_code
+    id: invalid_code
+  - trigger: event
+    event_type: alarmo_failed_to_arm
+    event_data:
+      entity_id: !input alarm
+      reason: not_allowed
+    id: not_allowed
+  - trigger: event
+    event_type: alarmo_failed_to_arm
+    event_data:
+      entity_id: !input alarm
+      reason: open_sensors
+    id: need_bypass
+
+  # ------------------------------------------------------------- Alarmo states
+  # not_from keeps the keypad quiet when HA restarts and the entity goes
+  # unknown/unavailable -> real state.
+  - trigger: state
+    entity_id: !input alarm
+    to: disarmed
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_disarmed
+  - trigger: state
+    entity_id: !input alarm
+    to: arming
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_arming
+  - trigger: state
+    entity_id: !input alarm
+    to: pending
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_pending
+  - trigger: state
+    entity_id: !input alarm
+    to: triggered
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_triggered
+  - trigger: state
+    entity_id: !input alarm
+    to: armed_away
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_armed_away
+  - trigger: state
+    entity_id: !input alarm
+    to: armed_vacation
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_armed_vacation
+  - trigger: state
+    entity_id: !input alarm
+    to: armed_home
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_armed_home
+  - trigger: state
+    entity_id: !input alarm
+    to: armed_night
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_armed_night
+  - trigger: state
+    entity_id: !input alarm
+    to: armed_custom_bypass
+    not_from:
+      - unknown
+      - unavailable
+    id: alarm_armed_custom_bypass
+
+actions:
+  - choose:
+      # ================================================================ DISARM
+      - alias: Disarm, or cancel a running countdown
+        conditions:
+          - condition: trigger
+            id:
+              - code_entered
+              - keypad_disarm
+              - keypad_cancel
+          - condition: template
+            value_template: >-
+              {{ states(alarm) not in ['disarmed', 'unknown', 'unavailable'] }}
+        sequence:
+          - action: alarmo.disarm
+            data:
+              entity_id: !input alarm
+              code: "{{ entered_code }}"
+
+      # ==================================================== CLEAR PANIC ALERT
+      # The alarm is already disarmed, so a Disarm/Cancel press here means
+      # "shut up" after a manually raised Fire/Police/Medical alert. Writing
+      # the Disarmed indicator is what actually stops the keypad.
+      - alias: Clear a manually raised panic alert
+        conditions:
+          - condition: trigger
+            id:
+              - keypad_disarm
+              - keypad_cancel
+          - condition: template
+            value_template: "{{ panic_cancel_requested }}"
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "2"
+              property_key: "1"
+              value: 99
+
+      # =================================================================== ARM
+      - alias: Arm away or home, with sensor-bypass confirmation
+        conditions:
+          - condition: trigger
+            id:
+              - keypad_arm_away
+              - keypad_arm_home
+          - condition: state
+            entity_id: !input alarm
+            state: disarmed
+        sequence:
+          - variables:
+              arm_mode: '{{ trigger.id.split("_")[2] }}'
+              arm_code: "{{ entered_code }}"
+          - action: alarmo.arm
+            data:
+              entity_id: !input alarm
+              mode: "{{ arm_mode }}"
+              force: false
+              code: "{{ arm_code }}"
+          # Did Alarmo refuse because sensors are open? Give it a moment.
+          - wait_for_trigger:
+              - trigger: event
+                event_type: alarmo_failed_to_arm
+                event_data:
+                  entity_id: !input alarm
+                  reason: open_sensors
+                id: open_sensors
+            timeout: 3
+            continue_on_timeout: true
+          - alias: If bypass was requested, wait for the user to confirm
+            if:
+              - condition: template
+                value_template: "{{ wait.trigger is not none }}"
+            then:
+              # The `need_bypass` branch (running in parallel) has already made
+              # the keypad say "Sensors require bypass". Enter or Arm confirms,
+              # Disarm or Cancel walks away.
+              - wait_for_trigger:
+                  - trigger: event
+                    event_type: zwave_js_notification
+                    event_data:
+                      command_class: 111
+                      device_id: !input keypad
+                      event_type: 2
+                    id: confirm
+                  - trigger: event
+                    event_type: zwave_js_notification
+                    event_data:
+                      command_class: 111
+                      device_id: !input keypad
+                      event_type: 5
+                    id: confirm
+                  - trigger: event
+                    event_type: zwave_js_notification
+                    event_data:
+                      command_class: 111
+                      device_id: !input keypad
+                      event_type: 6
+                    id: confirm
+                  - trigger: event
+                    event_type: zwave_js_notification
+                    event_data:
+                      command_class: 111
+                      device_id: !input keypad
+                      event_type: 3
+                    id: abort
+                  - trigger: event
+                    event_type: zwave_js_notification
+                    event_data:
+                      command_class: 111
+                      device_id: !input keypad
+                      event_type: 25
+                    id: abort
+                timeout: "{{ bypass_confirm_timeout }}"
+                continue_on_timeout: false
+              - condition: template
+                value_template: "{{ wait.trigger.id == 'confirm' }}"
+              - action: alarmo.arm
+                data:
+                  entity_id: !input alarm
+                  mode: "{{ arm_mode }}"
+                  force: true
+                  code: >-
+                    {% set c = wait.trigger.event.data.event_data %}
+                    {{ c | string | trim if c is not none and (c | string | trim) != '' else arm_code }}
+
+      # =========================================================== ERROR TONES
+      - alias: Code rejected
+        conditions:
+          - condition: trigger
+            id:
+              - invalid_code
+              - not_allowed
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "9"
+              property_key: "1"
+              value: 99
+
+      - alias: Sensors require bypass
+        conditions:
+          - condition: trigger
+            id: need_bypass
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "16"
+              property_key: "1"
+              value: 99
+
+      # ======================================================== STATE FEEDBACK
+      - alias: Alarmo disarmed
+        conditions:
+          - condition: trigger
+            id: alarm_disarmed
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "2"
+              property_key: "1"
+              value: 99
+          - alias: Optionally put the announcement volume back after a siren
+            if:
+              - condition: template
+                value_template: >-
+                  {{ restore_volume_enabled
+                     and trigger.from_state is not none
+                     and trigger.from_state.state == 'triggered' }}
+            then:
+              - delay:
+                  seconds: 2
+              - action: zwave_js.set_config_parameter
+                target:
+                  device_id: !input keypad
+                data:
+                  endpoint: 0
+                  parameter: 4
+                  value: !input announcement_volume
+
+      - alias: Alarmo armed away (or vacation)
+        conditions:
+          - condition: trigger
+            id:
+              - alarm_armed_away
+              - alarm_armed_vacation
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "11"
+              property_key: "1"
+              value: 99
+
+      # The keypad has no night or custom-bypass LED, so these ride on the
+      # Home/Stay indicator.
+      - alias: Alarmo armed home (or night / custom bypass)
+        conditions:
+          - condition: trigger
+            id:
+              - alarm_armed_home
+              - alarm_armed_night
+              - alarm_armed_custom_bypass
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "10"
+              property_key: "1"
+              value: 99
+
+      - alias: Exit delay (arming)
+        conditions:
+          - condition: trigger
+            id: alarm_arming
+          # A zero-length delay would otherwise announce a countdown of 0m0s.
+          - condition: template
+            value_template: "{{ (state_attr(alarm, 'delay') | int(0)) > 0 }}"
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "18"
+              property_key: "{{ delay_property_key }}"
+              value: "{{ delay_indicator_value }}"
+
+      - alias: Entry delay (pending)
+        conditions:
+          - condition: trigger
+            id: alarm_pending
+          # A zero-length delay would otherwise announce a countdown of 0m0s.
+          - condition: template
+            value_template: "{{ (state_attr(alarm, 'delay') | int(0)) > 0 }}"
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "17"
+              property_key: "{{ delay_property_key }}"
+              value: "{{ delay_indicator_value }}"
+
+      - alias: Alarm triggered - siren
+        conditions:
+          - condition: trigger
+            id: alarm_triggered
+        sequence:
+          - action: zwave_js.set_value
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "13"
+              property_key: "9"
+              value: 99
+
+      # ========================================================= PANIC BUTTONS
+      - alias: Fire button
+        conditions:
+          - condition: trigger
+            id: keypad_fire
+        sequence: !input selected_action_fire
+
+      - alias: Police button
+        conditions:
+          - condition: trigger
+            id: keypad_police
+        sequence: !input selected_action_police
+
+      - alias: Medical button
+        conditions:
+          - condition: trigger
+            id: keypad_medical
+        sequence: !input selected_action_medical
+
+  # The user's own "panic cleared" action lives in its own block: keeping it out
+  # of the branch above means an unset action (an empty list) cannot break the
+  # surrounding sequence.
+  - choose:
+      - alias: Panic alert cleared - run the user's action
+        conditions:
+          - condition: template
+            value_template: "{{ panic_cancel_requested }}"
+        sequence: !input selected_action_cancel
