@@ -133,7 +133,7 @@ in the blueprint already points at it, so the one-click import below works as
 soon as this is pushed.
 
 ```bash
-cd /Users/evancauteren/Documents/Repos/Personales/ring-keypad-blueprint
+cd /Users/evancauteren/Documents/Repos/Personales/ring-keypad-alarmo-blueprint
 git init -b main
 git add .
 git commit -m "Ring Keypad v2 + Alarmo blueprint, forked from ImSorryButWho/HomeAssistantNotes"

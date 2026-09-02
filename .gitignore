@@ -1,0 +1,53 @@
+# ---- macOS ----------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.TemporaryItems
+.AppleDouble
+.LSOverride
+.apdisk
+Icon?
+# Files that end with ~ from macOS/Finder and many editors
+*~
+
+# ---- Windows / Linux desktops --------------------------------------------
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
+.Trash-*
+
+# ---- Editors and IDEs -----------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+.netrwhist
+
+# ---- Home Assistant --------------------------------------------------------
+# Never commit a real HA config: secrets.yaml holds credentials, and .storage
+# holds Alarmo's user codes in clear text. Nothing from a live config belongs
+# in a blueprint repo.
+secrets.yaml
+.storage/
+*.db
+*.db-shm
+*.db-wal
+home-assistant.log*
+home-assistant_v2.db*
+.HA_VERSION
+deps/
+tts/
+
+# ---- Scratch ---------------------------------------------------------------
+*.bak
+*.orig
+*.rej
+*.tmp
+.env
