@@ -1,8 +1,9 @@
 ---
 # Ring Keypad v2 <-> Alarmo
 #
-# Personal fork of https://github.com/ImSorryButWho/HomeAssistantNotes
-# (keypad_blueprint.yaml, upstream main @ 375e1d0, 2025-08-09).
+# Maintained fork of https://github.com/ImSorryButWho/HomeAssistantNotes
+# (keypad_blueprint.yaml, upstream main @ 375e1d0, 2025-08-09), with the
+# useful open pull requests merged and several open issues fixed.
 #
 # Requires Home Assistant 2024.10 or newer (modern `triggers:` / `actions:` /
 # `action:` syntax and the `sequence:` grouping action).
@@ -10,7 +11,7 @@
 # See README.md in this repo for the full rationale behind every change.
 
 blueprint:
-  name: Ring Keypad v2 + Alarmo (Eduardo's build)
+  name: Ring Keypad v2 + Alarmo
   description: >-
     Two-way sync between a **Ring Alarm Keypad v2** (Z-Wave JS) and an
     **Alarmo** alarm control panel.
