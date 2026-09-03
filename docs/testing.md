@@ -144,13 +144,62 @@ anyway.
 
 | # | Do this | Expect |
 |---|---|---|
-| H1 | With Alarmo disarmed, restart Home Assistant and wait ~90 s | The Disarmed key is lit again. With **Re-sync silently** off it also 🔊 says "Disarmed"; with it on, the LED updates in silence |
+| H1 | With Alarmo disarmed, restart Home Assistant and wait ~90 s | The Disarmed key is lit again, in silence (**Re-sync silently** is on by default). With that option off it also 🔊 says "Disarmed" |
 | H2 | Arm Away, restart HA, wait ~90 s | Away is re-asserted, not Disarmed |
 | H3 | Start an exit delay, restart HA mid-countdown | The re-sync **skips** it — no mode is written over the countdown, because `arming` is not a settled state |
-| H4 | Set **Also re-sync every N hours** to 1 and wait for the top of the hour | The mode is re-asserted. Set it back to 0 afterwards unless silent re-sync works for you |
+| H4 | Set **Also re-sync every N hours** to 1 and wait for the top of the hour | The mode is re-asserted. Leave it at 1 only for the test; 6 is the sensible standing value |
 
-To test the silent form on its own without waiting for a restart, call this
-from **Developer tools → Actions** and listen:
+### Testing the silent form by hand
+
+Do this from **Developer tools → Actions** in YAML mode, standing next to the
+keypad, somewhere quiet. The point of step 1 is to put the keypad in a
+*visibly wrong* state first — firing the silent call while it already shows
+Disarmed tells you nothing, because "worked silently" and "command rejected"
+look identical.
+
+Make sure Alarmo is **disarmed** before you start. These calls only write to the
+keypad; they do not change Alarmo, and they do not trigger the blueprint.
+
+**Step 1 — set a known-wrong mode, audibly.** This also proves your device id
+and call shape are right:
+
+```yaml
+action: zwave_js.set_value
+target:
+  device_id: YOUR_KEYPAD_DEVICE_ID
+data:
+  command_class: "135"
+  endpoint: "0"
+  property: "11"          # Armed Away
+  property_key: "1"
+  value: 99
+```
+
+Expect the Away LED and 🔊 "Away and armed".
+
+**Step 2 — now the silent Disarmed call.** Watch the LED and listen:
+
+```yaml
+action: zwave_js.set_value
+target:
+  device_id: YOUR_KEYPAD_DEVICE_ID
+data:
+  command_class: "135"
+  endpoint: "0"
+  property: "2"           # Disarmed
+  property_key: "9"       # voice volume instead of LED brightness
+  value: 0
+```
+
+**Step 3 — read the result:**
+
+| What happens | Meaning | What to do |
+|---|---|---|
+| LED switches to Disarmed, **no voice** | Silent re-sync works | Turn on **Re-sync silently**; the N-hourly timer is now reasonable to enable |
+| LED switches **and** it says "Disarmed" | Command fine, volume 0 not honoured | Leave the option off, or try `value: 1` — the documented minimum — which may be quiet enough |
+| **Nothing at all** | The value was rejected | Retry with `value: 1`. If that also does nothing, this firmware has no silent form |
+
+**Step 4 — put it back**, so the keypad matches Alarmo again:
 
 ```yaml
 action: zwave_js.set_value
@@ -160,14 +209,22 @@ data:
   command_class: "135"
   endpoint: "0"
   property: "2"
-  property_key: "9"
-  value: 0
+  property_key: "1"
+  value: 99
 ```
 
-If the Disarmed key lights **without** the keypad speaking, turn **Re-sync
-silently** on and the N-hourly timer becomes reasonable to use. If it speaks
-anyway, or does nothing, leave the option off — the audible form
-(`property_key: "1"`, `value: 99`) is the proven one.
+If step 2 produced nothing, also check **Settings → System → Logs** — a value
+Z-Wave JS refuses outright usually says so there, which separates "rejected by
+the driver" from "accepted but ignored by the keypad".
+
+### If there is no silent form
+
+There is a guaranteed fallback that uses only documented config parameters:
+drop **parameter 4** (Announcement Audio Volume) to 0, send the normal
+`property_key: "1"` indicator, then put parameter 4 back. Upstream PR #36 uses
+exactly this sandwich for its night mode. It costs two extra Z-Wave writes per
+re-sync and leaves a brief window where an unrelated announcement would also be
+muted, which is why it is not the default — but it works on any firmware.
 
 H1 is deliberately in tension with [G1](#g-robustness): G1 checks that the
 keypad stays quiet through a restart, which is what the `not_from` guards on

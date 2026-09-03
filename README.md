@@ -24,6 +24,10 @@ better starting point — see the table below.
 
 Requires **Home Assistant 2024.10 or newer** (modern `triggers:` / `actions:` /
 `action:` syntax, the `sequence:` grouping action and blueprint input sections).
+The blueprint declares this as `min_version`, so an older Home Assistant
+refuses the import with a clear message rather than failing obscurely later.
+
+Current version: **1.1.0** — see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -140,12 +144,38 @@ Beyond the PR and issue fixes above:
   (e.g. "turn the siren off"), which is the normal shape for it anyway.
 - Arming from the keypad still needs a Disarm/Cancel press to abandon a bypass
   prompt, otherwise the confirmation window just times out silently.
-- The re-sync announces the mode out loud unless **Re-sync silently** works on
-  your keypad — it sets the voice volume to 0, which not every firmware
-  honours. Once per restart is usually fine; that is why the N-hourly timer is
-  off by default.
+- The re-sync defaults to the **silent** form (voice volume 0), which is
+  confirmed working on the firmware tested so far but is not guaranteed
+  everywhere. If your mode LED never updates after a restart, turn **Re-sync
+  silently** off — the audible form is universally accepted.
+  [`docs/testing.md`](docs/testing.md) group H has a two-minute check that
+  tells the two apart.
+- The N-hourly re-sync is off by default even so: an N-hourly cycle always
+  includes midnight, and on a keypad that ignores the silent form that would be
+  an announcement in the middle of the night. Turn it on (6 is a good value)
+  once you have confirmed silence.
 
 ---
+
+## Versioning
+
+Home Assistant has no version field for blueprints and no update notification —
+`blueprint.version` is rejected outright by the schema. So the version lives in
+three places that travel with the file:
+
+- the comment at the top of the YAML
+- the **first line of the blueprint description**, which is what you see in
+  **Settings → Automations & scenes → Blueprints** without opening any files
+- a git tag in this repo, with [`CHANGELOG.md`](CHANGELOG.md) for the detail
+
+**To check which version you are running:** open Settings → Automations &
+scenes → Blueprints and read the version at the start of this blueprint's
+description.
+
+**To update:** ⋮ on the blueprint → **Re-import blueprint**. It re-fetches from
+`source_url`, so the new version has to be pushed here first. New inputs take
+their defaults automatically and your existing choices are kept; the changelog
+flags any release where that is not true.
 
 ## Tracking upstream
 

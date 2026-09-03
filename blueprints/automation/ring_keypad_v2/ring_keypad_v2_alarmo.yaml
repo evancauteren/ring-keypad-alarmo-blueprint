@@ -1,6 +1,8 @@
 ---
 # Ring Keypad v2 <-> Alarmo
 #
+# Version: 1.1.0   (see CHANGELOG.md)
+#
 # Maintained fork of https://github.com/ImSorryButWho/HomeAssistantNotes
 # (keypad_blueprint.yaml, upstream main @ 375e1d0, 2025-08-09), with the
 # useful open pull requests merged and several open issues fixed.
@@ -13,8 +15,8 @@
 blueprint:
   name: Ring Keypad v2 + Alarmo
   description: >-
-    Two-way sync between a **Ring Alarm Keypad v2** (Z-Wave JS) and an
-    **Alarmo** alarm control panel.
+    **v1.1.0** — Two-way sync between a **Ring Alarm Keypad v2** (Z-Wave JS)
+    and an **Alarmo** alarm control panel.
 
 
     Arm and disarm from the keypad; Alarmo's state drives the keypad's LEDs,
@@ -45,6 +47,11 @@ blueprint:
     your keypad > Z-Wave device config (parameters 4/5/6 volumes,
     12/13/14 brightness, 18 language).
   domain: automation
+  author: evancauteren (fork of ImSorryButWho)
+  homeassistant:
+    # Refuses to import on anything older, with a clear message, rather than
+    # failing obscurely on `triggers:` / `sequence:` later.
+    min_version: 2024.10.0
   # Must match this file's real location, or Home Assistant refuses the import.
   source_url: https://github.com/evancauteren/ring-keypad-alarmo-blueprint/blob/main/blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml
   input:
@@ -166,9 +173,11 @@ blueprint:
           description: >-
             0 disables it. A timer catches the case a restart cannot: the keypad
             forgetting its mode overnight while Home Assistant keeps running.
-            Only worth enabling with "Re-sync silently" below confirmed working
-            on your keypad, otherwise it announces the mode out loud every N
-            hours.
+            6 is a good value once you have confirmed "Re-sync silently" below
+            actually is silent on your keypad. Left at 0 by default because an
+            N-hourly cycle always includes midnight, and on firmware that
+            ignores the silent form that would be an announcement in the middle
+            of the night.
           default: 0
           selector:
             number:
@@ -182,10 +191,12 @@ blueprint:
           description: >-
             Sets the mode with the voice volume at 0 instead of the normal
             full-brightness form, so the LED updates without the keypad
-            announcing itself. Not every firmware honours this - test it with a
-            manual re-sync before relying on it, and leave it off if your keypad
-            speaks anyway.
-          default: false
+            announcing itself. Confirmed working on firmware tested so far. If
+            your mode LED never updates after a restart, your keypad is
+            rejecting the silent form - turn this off and it will use the
+            audible one, which every firmware accepts. See docs/testing.md
+            group H for a two-minute check.
+          default: true
           selector:
             boolean:
 
