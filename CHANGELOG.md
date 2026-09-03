@@ -1,9 +1,9 @@
 # Changelog
 
-Home Assistant has no version field for blueprints, so the version lives in
-three places that travel with the file: the comment at the top of the YAML, the
-first line of the blueprint description (which is what you see in
-**Settings → Automations & scenes → Blueprints**), and the git tag here.
+Home Assistant has no version field for blueprints, so the version lives in the
+**blueprint name** — which is the only thing shown in
+**Settings → Automations & scenes → Blueprints** — plus a comment at the top of
+the YAML and a git tag here.
 
 This project uses [semantic versioning](https://semver.org/):
 
@@ -18,6 +18,18 @@ To update, push this repo, then **Settings → Automations & scenes → Blueprin
 existing choices are kept.
 
 ---
+
+## 1.1.1
+
+- The version now lives in the blueprint **name**
+  (`Ring Keypad v2 + Alarmo (v1.1.1)`) rather than the description. The
+  blueprint list in Home Assistant shows names only, so a version in the
+  description was invisible exactly where you would look for it. This follows
+  the convention other published blueprints use.
+
+No behavioural change. Re-import to pick it up; your automation keeps working
+either way, because Home Assistant identifies a blueprint by file path, not by
+name.
 
 ## 1.1.0
 
@@ -48,7 +60,7 @@ backlight white, but the Disarmed key is not blue.
 - Added `homeassistant: min_version: 2024.10.0`. Home Assistant now refuses the
   import on older versions with "Requires at least Home Assistant 2024.10.0"
   instead of failing obscurely on `triggers:` or `sequence:` later.
-- Added `author`, and a version string in the file header and the description.
+- Added `author`, and a version string in the file header.
 
 **Docs.**
 

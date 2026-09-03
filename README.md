@@ -27,7 +27,7 @@ Requires **Home Assistant 2024.10 or newer** (modern `triggers:` / `actions:` /
 The blueprint declares this as `min_version`, so an older Home Assistant
 refuses the import with a clear message rather than failing obscurely later.
 
-Current version: **1.1.0** — see [`CHANGELOG.md`](CHANGELOG.md).
+Current version: **1.1.1** — see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -160,17 +160,20 @@ Beyond the PR and issue fixes above:
 ## Versioning
 
 Home Assistant has no version field for blueprints and no update notification —
-`blueprint.version` is rejected outright by the schema. So the version lives in
-three places that travel with the file:
+`blueprint.version` is rejected outright by the schema, and the blueprint list
+shows names only, not descriptions. So the version goes in the **name**, the
+way other published blueprints do it:
 
-- the comment at the top of the YAML
-- the **first line of the blueprint description**, which is what you see in
-  **Settings → Automations & scenes → Blueprints** without opening any files
+- `Ring Keypad v2 + Alarmo (v1.1.1)` — visible at a glance in
+  **Settings → Automations & scenes → Blueprints**
+- a comment at the top of the YAML, for anyone reading the file
 - a git tag in this repo, with [`CHANGELOG.md`](CHANGELOG.md) for the detail
 
 **To check which version you are running:** open Settings → Automations &
-scenes → Blueprints and read the version at the start of this blueprint's
-description.
+scenes → Blueprints and read the number after the blueprint name.
+
+Renaming on each release is safe: Home Assistant identifies a blueprint by its
+file path, so existing automations keep working and simply show the new name.
 
 **To update:** ⋮ on the blueprint → **Re-import blueprint**. It re-fetches from
 `source_url`, so the new version has to be pushed here first. New inputs take
