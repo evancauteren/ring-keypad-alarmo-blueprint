@@ -98,20 +98,20 @@ blueprint does not manage them.
 | **6** | **Siren volume** | 0–10 | 10 |
 | 7 | Long press duration: emergency buttons | 2–5 s | 3 |
 | 8 | Long press duration: number pad | 2–5 s | 3 |
-| 9 | Timeout: proximity display | 0–30 s | 5 |
-| 10 | Timeout: display on button press | 0–30 s | 5 |
-| 11 | Timeout: display on status change | 1–30 s | 5 |
-| **12** | **Brightness: security mode** | 0–100 % | 100 |
+| 9 | Display timeout after proximity is detected | 0–30 s | 5 |
+| 10 | Display timeout after a button press that goes nowhere | 0–30 s | 5 |
+| 11 | Display timeout after a status change from the hub | 1–30 s | 5 |
+| **12** | **Brightness: security mode LEDs** | 0–100 % | 100 |
 | **13** | **Brightness: key backlight** | 0–100 % | 100 |
-| 14 | Key backlight ambient light sensor level | 0–100 % | 20 |
-| 15 | Proximity detection | disable / enable | enable |
+| 14 | Ambient light level above which the keypad stops backlighting | 0–100 % | 20 |
+| 15 | Proximity detection on/off | disable / enable | enable |
 | 16 | LED ramp time | 0–255 s | 50 |
 | 17 | Battery low threshold | 0–100 % | 15 |
 | **18** | **Keypad language** | English / French / Spanish | 30 |
 | 19 | Battery warning threshold | 0–100 % | 5 |
-| 20 | Security mode blink duration | 1–60 | 2 |
+| 20 | How long each blink stays lit, when 22 is set to an interval | 1–60 s | 2 |
 | 21 | Supervision report timeout | 500–30000 ms | 10000 |
-| 22 | Security mode display | always off / always on | always off |
+| **22** | **How the security mode LED is displayed** — see below | 0–601 | 0 |
 | 23 | Languages supported (read-only bitmask) | — | 37 |
 | 24 | Calibrate speaker | disable / enable | disable |
 | 26 | Motion sensor timeout (firmware ≥ 1.18) | 0–60 s | 3 |
@@ -120,6 +120,47 @@ Parameter 7 is worth knowing about: it is the hold time required before the
 Fire / Police / Medical buttons actually send their event. Shorten it to 2 s if
 three seconds of holding feels long, lengthen it to 5 s to make accidental
 panic alerts harder.
+
+### "The mode LED is off — did the sync break?"
+
+Almost certainly not. **Parameter 22 defaults to 0, which the Ring manual
+defines as "always off, except when there's activity."** Out of the box the
+Disarmed / Home / Away LED is *not* a standing indicator: it lights only when
+something wakes the display, and then times out.
+
+Three things count as activity, each with its own timeout:
+
+| Wakes the display | Stays lit for |
+|---|---|
+| You walk up to it (needs parameter 15 enabled) | parameter **9** (default 5 s) |
+| You press a key without completing a sequence | parameter **10** (default 5 s) |
+| The hub sends an indicator command — i.e. Alarmo changed state | parameter **11** (default 5 s) |
+
+So a keypad that showed its mode all day during testing and shows nothing the
+next morning is behaving exactly as designed: on a day of testing, state
+changes and your presence kept re-waking it; overnight, nothing did.
+
+Parameter 22 is the lever if you want a standing indicator:
+
+| Value | Behaviour |
+|---|---|
+| `0` | Always off, except on activity **(default)** |
+| `1`–`600` | Blink the mode LED every N seconds; parameter **20** sets how long each blink lasts |
+| `601` | Always on |
+
+Set it in **Settings → Devices & services → Z-Wave JS → your keypad →
+Configure device**. Some Z-Wave JS versions only offer the two named options
+(Always off / Always on) in a dropdown; to use an interval, pick the raw-value
+entry box, or call `zwave_js.set_config_parameter` with `parameter: 22` and the
+number you want.
+
+Before turning on "always on", note that **this keypad is designed to be
+mains-powered** and a permanently lit LED bar will flatten the batteries
+quickly. An interval such as 30–60 s with a short parameter 20 is the friendlier
+compromise. Parameter 12 dims the mode LEDs if "always on" is too bright at
+night, and parameter 14 is a separate ambient-light threshold above which the
+keypad stops backlighting the keys — which is why the keypad can look darker in
+a bright room than in a dim one.
 
 ## Alarmo side
 

@@ -37,6 +37,8 @@ blueprint:
 
     - Optional volume restore after an alarm (upstream issue #35)
 
+    - Re-asserts the mode LED after a restart, so a keypad that forgot its state does not sit blank until the next arm/disarm
+
 
     Keypad volume, LED brightness and voice language are *not* set here — they
     are Z-Wave device config parameters. Set them in Settings > Devices >
@@ -142,6 +144,51 @@ blueprint:
               step: 1
               mode: slider
 
+    state_resync:
+      name: State re-sync
+      icon: mdi:sync
+      collapsed: true
+      input:
+        resync_on_start:
+          name: Re-sync after Home Assistant restarts
+          description: >-
+            The keypad remembers its own mode LED, and this blueprint only
+            writes it when Alarmo changes state. If the keypad forgets (a power
+            blip, a spell off the mesh) while Alarmo sits in one state, the mode
+            LED stays blank until the next arm or disarm. This re-states the
+            current state about a minute after Home Assistant starts, once
+            Z-Wave JS is ready.
+          default: true
+          selector:
+            boolean:
+        resync_interval_hours:
+          name: Also re-sync every N hours
+          description: >-
+            0 disables it. A timer catches the case a restart cannot: the keypad
+            forgetting its mode overnight while Home Assistant keeps running.
+            Only worth enabling with "Re-sync silently" below confirmed working
+            on your keypad, otherwise it announces the mode out loud every N
+            hours.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 24
+              step: 1
+              unit_of_measurement: hours
+              mode: slider
+        resync_silent:
+          name: Re-sync silently
+          description: >-
+            Sets the mode with the voice volume at 0 instead of the normal
+            full-brightness form, so the LED updates without the keypad
+            announcing itself. Not every firmware honours this - test it with a
+            manual re-sync before relying on it, and leave it off if your keypad
+            speaks anyway.
+          default: false
+          selector:
+            boolean:
+
     panic_actions:
       name: Panic button actions
       icon: mdi:alarm-light
@@ -190,6 +237,9 @@ variables:
   require_code_to_cancel: !input require_code_to_cancel
   restore_volume_enabled: !input restore_volume_enabled
   bypass_confirm_timeout: !input bypass_confirm_timeout
+  resync_on_start: !input resync_on_start
+  resync_interval_hours: !input resync_interval_hours
+  resync_silent: !input resync_silent
   # The code typed on the keypad before the button press, or "" if none.
   # Guarded with `'event' in trigger` so it stays safe on state triggers.
   entered_code: >-
@@ -288,6 +338,18 @@ triggers:
       reason: open_sensors
     id: need_bypass
 
+  # -------------------------------------------------------------- mode re-sync
+  - trigger: homeassistant
+    event: start
+    id: resync_start
+  # Fires hourly; the branch decides whether this hour is one of the N-hourly
+  # slots, because a trigger cannot be templated but a condition can.
+  - trigger: time_pattern
+    hours: "/1"
+    minutes: 0
+    seconds: 0
+    id: resync_tick
+
   # ------------------------------------------------------------- Alarmo states
   # not_from keeps the keypad quiet when HA restarts and the entity goes
   # unknown/unavailable -> real state.
@@ -357,6 +419,56 @@ triggers:
 
 actions:
   - choose:
+      # ============================================================ MODE RE-SYNC
+      # Re-states the mode LED for a keypad that has forgotten it. Only ever
+      # writes to the keypad - never arms, disarms, or touches Alarmo.
+      - alias: Re-assert the current Alarmo state on the keypad
+        conditions:
+          - condition: trigger
+            id:
+              - resync_start
+              - resync_tick
+          - condition: template
+            value_template: >-
+              {{ (trigger.id == 'resync_start' and resync_on_start)
+                 or (trigger.id == 'resync_tick'
+                     and (resync_interval_hours | int(0)) > 0
+                     and now().hour % (resync_interval_hours | int(1)) == 0) }}
+        sequence:
+          - alias: Let Z-Wave JS finish interviewing before writing to the keypad
+            if:
+              - condition: trigger
+                id: resync_start
+            then:
+              - delay:
+                  seconds: 60
+          - variables:
+              # Settled states only. Re-asserting during arming/pending would
+              # wipe the countdown off the light bar, and re-asserting
+              # `triggered` would set the siren off again.
+              resync_property: >-
+                {% set m = {
+                     'disarmed': '2',
+                     'armed_home': '10',
+                     'armed_night': '10',
+                     'armed_custom_bypass': '10',
+                     'armed_away': '11',
+                     'armed_vacation': '11' } %}
+                {{ m.get(states(alarm), '') }}
+          - condition: template
+            value_template: "{{ resync_property != '' }}"
+          - alias: Write the indicator, quietly if the keypad allows it
+            action: zwave_js.set_value
+            continue_on_error: true
+            target:
+              device_id: !input keypad
+            data:
+              command_class: "135"
+              endpoint: "0"
+              property: "{{ resync_property }}"
+              property_key: "{{ '9' if resync_silent else '1' }}"
+              value: "{{ 0 if resync_silent else 99 }}"
+
       # ================================================================ DISARM
       - alias: Disarm, or cancel a running countdown
         conditions:

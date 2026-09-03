@@ -12,6 +12,9 @@ Blueprint: [`blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml`](b
 Reference tables for the keypad's Z-Wave indicators and config parameters:
 [`docs/keypad-reference.md`](docs/keypad-reference.md)
 
+A test plan that exercises every branch, and where to look when one fails:
+[`docs/testing.md`](docs/testing.md)
+
 **Scope:** one keypad, Alarmo, Away + Home as the mode keys you press. Night,
 Vacation and Custom-bypass are reflected on the keypad's LEDs too, for when
 they are armed from Home Assistant rather than the keypad. For **two or more
@@ -118,6 +121,14 @@ Beyond the PR and issue fixes above:
 - **Inputs are grouped into collapsible sections** (Devices / Behaviour /
   Volume recovery / Panic actions), so the two things you must set are the only
   two things you see.
+- **The mode LED is re-asserted after a restart.** The keypad remembers its own
+  mode, and both upstream and this fork only write it when Alarmo *changes*
+  state — so a keypad that forgets (a power blip, a spell off the mesh) while
+  Alarmo sits in one state shows nothing until the next arm or disarm. A
+  re-sync branch re-states the settled state about a minute after HA starts,
+  and optionally every N hours. It only ever writes to the keypad; it never
+  arms, disarms or touches Alarmo, and it skips `arming`, `pending` and
+  `triggered` so it cannot wipe a countdown or re-fire the siren.
 - **Traces stay disabled** (`stored_traces: 0`), and now with a comment saying
   why: a trace of this automation would write your PIN in clear text into
   `.storage`. Raise it temporarily if you need to debug, then put it back.
@@ -129,6 +140,10 @@ Beyond the PR and issue fixes above:
   (e.g. "turn the siren off"), which is the normal shape for it anyway.
 - Arming from the keypad still needs a Disarm/Cancel press to abandon a bypass
   prompt, otherwise the confirmation window just times out silently.
+- The re-sync announces the mode out loud unless **Re-sync silently** works on
+  your keypad — it sets the voice volume to 0, which not every firmware
+  honours. Once per restart is usually fine; that is why the N-hourly timer is
+  off by default.
 
 ---
 
@@ -168,10 +183,10 @@ schemas, not by eye:
   a leading zero, bare keypress, both delay formats, a missing `delay`
   attribute, and the post-siren volume-restore path
 
-The one thing no static check can do is press the buttons. Worth trying in
-this order after installing: arm away, arm home, disarm with a code, disarm
-with a wrong code (error tone), open a door and arm (bypass prompt → Enter),
-hold Medical then Disarm with a code (alert clears).
+The one thing no static check can do is press the buttons.
+[`docs/testing.md`](docs/testing.md) is the manual pass: 25 checks across mode
+sync, countdowns, sensor bypass, panic buttons, the siren and an HA restart,
+plus which log to open when one of them fails.
 
 ## Credit and licence
 
