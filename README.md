@@ -1,246 +1,206 @@
-# Ring Keypad v2 + Alarmo blueprint
+# Ring Keypad v2 + Alarmo
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fevancauteren%2Fring-keypad-alarmo-blueprint%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fring_keypad_v2%2Fring_keypad_v2_alarmo.yaml)
 
-A maintained fork of the Ring Keypad v2 blueprint from
-[ImSorryButWho/HomeAssistantNotes](https://github.com/ImSorryButWho/HomeAssistantNotes),
-which has had no commit since **2025-08-09** (`375e1d0`) and, as of September
-2026, 5 open pull requests and 12 open issues with no maintainer replies.
+[![Latest release](https://img.shields.io/github/v/release/evancauteren/ring-keypad-alarmo-blueprint)](https://github.com/evancauteren/ring-keypad-alarmo-blueprint/releases)
+![Home Assistant 2024.10+](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-41BDF5?logo=homeassistant&logoColor=white)
 
-Blueprint: [`blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml`](blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml)
+A Home Assistant blueprint that turns a **Ring Alarm Keypad v2** (Z-Wave JS)
+into the control panel for **[Alarmo](https://github.com/nielsfaber/alarmo)**.
+Arm and disarm from the keypad, and the keypad's LEDs, voice prompts,
+countdowns and siren follow Alarmo, whether you arm from the keypad, a
+dashboard or an automation.
 
-Reference tables for the keypad's Z-Wave indicators and config parameters:
-[`docs/keypad-reference.md`](docs/keypad-reference.md)
+## Features
 
-A test plan that exercises every branch, and where to look when one fails:
-[`docs/testing.md`](docs/testing.md)
+- **Arm and disarm** with your Alarmo codes: Away, Home and Disarm keys.
+- **Entry and exit countdowns** on the light bar, sized from Alarmo's delays.
+- **Sensor bypass.** If a door is open, the keypad says "Sensors require
+  bypass". Press Enter or Arm again within a window you choose to force-arm,
+  or Disarm/Cancel to give up.
+- **Clear panic alerts.** Fire, Police and Medical (held) run your own actions;
+  Disarm or Cancel clears them from the keypad, code-gated by default.
+- **Cancel key** stops a running countdown.
+- **Switch modes without disarming**, e.g. Home → Away. How far this goes is
+  configurable.
+- **Every Alarmo mode shown.** Night and Custom bypass light the Home LED,
+  Vacation lights Away.
+- **Error tones** for a wrong code, an arm mode that isn't enabled, and so on,
+  only for *your* Alarmo panel.
+- **Recovers after a restart.** The mode LED is re-asserted about a minute
+  after Home Assistant starts, silently where the firmware allows it.
+- **Compatible with older Z-Wave JS** through a selectable countdown format.
 
-**Scope:** one keypad, Alarmo, Away + Home as the mode keys you press. Night,
-Vacation and Custom-bypass are reflected on the keypad's LEDs too, for when
-they are armed from Home Assistant rather than the keypad. For **two or more
-keypads**, upstream PR
-[#49](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/49) is the
-better starting point — see the table below.
+## Requirements
 
-Requires **Home Assistant 2024.10 or newer** (modern `triggers:` / `actions:` /
-`action:` syntax, the `sequence:` grouping action and blueprint input sections).
-The blueprint declares this as `min_version`, so an older Home Assistant
-refuses the import with a clear message rather than failing obscurely later.
+- Home Assistant **2024.10** or newer
+- A **Ring Alarm Keypad v2**, paired with **Z-Wave JS** (S2 security; use
+  SmartStart)
+- **Alarmo v1.10.9** or newer
 
-Current version: **1.2.1** — see [`CHANGELOG.md`](CHANGELOG.md).
+## Installation
 
----
-
-## Install
-
-Click the import badge above, or paste this into
+Click the **Import Blueprint** badge above, or paste this URL into
 **Settings → Automations & scenes → Blueprints → Import blueprint**:
 
 ```
 https://github.com/evancauteren/ring-keypad-alarmo-blueprint/blob/main/blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml
 ```
 
-Then **Create automation** from it and pick your keypad device and your Alarmo
-entity. Everything else has a working default.
+Then **Create automation** from it and pick your keypad and your Alarmo entity.
+Everything else has a working default.
 
-To install by hand instead, copy
-`blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml` to
-`config/blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml` and
-run **Developer tools → YAML → Reload blueprints**.
+<details>
+<summary>Manual install</summary>
 
-### What is deliberately *not* in the blueprint
+Copy
+[`ring_keypad_v2_alarmo.yaml`](blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml)
+to `config/blueprints/automation/ring_keypad_v2/ring_keypad_v2_alarmo.yaml`,
+then run **Developer tools → YAML → Reload blueprints**.
 
-Keypad **volume**, **LED brightness** and **voice language** are Z-Wave device
-config parameters, not automation logic. Set them once in
-**Settings → Devices & services → Z-Wave JS → your keypad → Configure device**:
+</details>
+
+## Configuration
+
+Only **Devices** is required. The other sections are collapsed and have
+defaults.
+
+| Section | Option | Default |
+|---|---|---|
+| **Devices** | Keypad device, Alarm control panel | — |
+| **Behaviour** | Bypass confirmation window | 30 s |
+| | Require a code to clear a panic alert | On |
+| | Switching arm modes from the keypad | To a stricter mode only |
+| | Entry/exit delay indicator format | Modern (`timeout`) |
+| **Volume recovery** | Re-assert announcement volume after an alarm | Off |
+| **State re-sync** | Re-sync after Home Assistant restarts | On |
+| | Also re-sync every N hours | 0 (off) |
+| | Re-sync silently | On |
+| **Panic button actions** | Police / Fire / Medical held, Panic alert cleared | None |
+
+### Volume, brightness and language
+
+These are Z-Wave settings on the keypad itself, not part of the automation.
+Set them once in **Settings → Devices & services → Z-Wave JS → your keypad →
+Configure device**:
 
 | Parameter | What it does | Range |
 |---|---|---|
-| 4 | Announcement audio volume | 0–10 (default 7) |
+| 4 | Announcement volume | 0–10 (default 7) |
 | 5 | Key tone volume | 0–10 (default 6) |
 | 6 | Siren volume | 0–10 (default 10) |
-| 12 | Brightness: security mode LEDs | 0–100 % |
+| 7 | Hold time for Fire / Police / Medical | 2–5 s (default 3) |
+| 12 | Brightness: mode LEDs | 0–100 % |
 | 13 | Brightness: key backlight | 0–100 % |
-| 18 | Keypad language (English / French / Spanish) | — |
+| 18 | Language (English / French / Spanish) | — |
+| 22 | Mode LED: off except on activity, blinking, or always on | 0–601 (default 0) |
 
-The full list, with defaults and ranges, is in
-[`docs/keypad-reference.md`](docs/keypad-reference.md).
+All parameters are in [`docs/keypad-reference.md`](docs/keypad-reference.md).
 
----
+## How it works
 
-## Upstream pull requests: what is in, what is out
-
-| PR | Title | Taken? | Why |
-|---|---|---|---|
-| [#43](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/43) | Scope `alarmo_failed_to_arm` to the selected panel | **Taken as-is** | Correct and important. Upstream reacts to *any* Alarmo area's failure, so with more than one Alarmo area your keypad beeps for a panel it has nothing to do with. Verified against Alarmo's source: `event.py` puts `entity_id` in the event payload, added 2025-05-25 and shipped in **Alarmo v1.10.9**. If you are on something older than that, this filter would silently stop the error tones — check your Alarmo version. |
-| [#36](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/36) | Volume per alarm mode + night mode | **Ideas taken, code not** | Its `armed_night` / `armed_vacation` handling is right and is in this fork. Its volume mechanism (writing Z-Wave config parameter 4 around the mode change) is also sound — parameter 4 really is "Announcement Audio Volume", 0–10. But it has two problems: it sets the Armed-Home indicator to `value: 100`, and the valid range is 0–99 (upstream fixed exactly this in commit `7973a1e`, "Max value 100 -> 99"), and it reuses the same trigger `id` for two different triggers, which works but makes the intent unreadable. The quiet-night volume behaviour is also only useful if you actually arm night mode from the keypad, which this fork's scope does not cover. |
-| [#49](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/49) | Multi-keypad sync blueprint | **Architecture borrowed, not the file** | This is the best-engineered PR in the repo. Its key insight — after asking Alarmo to arm, *wait to find out which* of success / invalid code / open sensors happened, instead of blindly waiting for a keypress — is adopted here. Its actual file is a separate multi-keypad blueprint (device filtering moved from the trigger into a template condition, `repeat` loops over every keypad); with a single keypad that machinery is pure overhead, and it means the automation wakes for **every** Z-Wave entry-control event on the network. With two or more keypads, use that PR instead of this fork. |
-| [#48](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/48) | Fix the `property_key` docs | **Taken (docs)** | Correct: time-taking indicators use `property_key: timeout` with a `1m30s`-style duration, not `property_key: 7` in seconds. Folded into `docs/keypad-reference.md`. Fixes open issue #46. |
-| [#19](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/19) | Align features with native Ring behaviour | **Not applicable** | Touches `keypad-blueprint-v1.yaml` only — the **v1** keypad, a different device and a different blueprint. |
-
-## Upstream issues: what this fork fixes
-
-| Issue | What it reports | Handled here? |
-|---|---|---|
-| [#23](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/23) Bypass never completes | Arming with an open sensor prompts for bypass; entering the code again does nothing | **Fixed.** Two real bugs upstream: the confirmation window is hard-coded to **5 seconds** starting the instant the arm command is sent — too short for a human to hear "Sensors require bypass" and react — and the wait only matches `event_data: null`, i.e. a *bare* Enter, so entering your code again never matches. Here the arm branch waits for Alarmo's `open_sensors` rejection, *then* opens a window you control (default 30 s) that accepts Enter **or** Arm, with or without a code, and force-arms with whichever code was given. Disarm or Cancel walks away instead. |
-| [#45](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/45) No way to cancel a panic alert | A Fire/Police/Medical alert "doesn't seem to shut up" | **Fixed.** Pressing Disarm or Cancel while the alarm is already disarmed re-asserts the Disarmed indicator (which is what actually silences the keypad) and runs a new optional **Panic alert cleared** action so you can stop sirens and notifications too. Code-gated by default, as the reporter argued — an intruder should not be able to silence it. |
-| [#21](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/21) Fire alarm peculiarities | Fire alert cannot be turned off; keypad then lags 10–20 s | **Partly fixed.** Same root cause as #45 and handled by the same path. The 10–20 s lag afterwards is keypad firmware/Z-Wave behaviour, nothing a blueprint can reach. |
-| [#44](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/44) Arming countdown stopped after an upgrade | Reporter blames commit `d9cebab` | **Mitigated, with a switch.** `d9cebab` moved the delay indicator from `property_key: 7` (seconds) to `property_key: timeout` (`0m30s`). That is right for current Z-Wave JS but breaks anyone whose keypad still exposes the numeric key — see issue #42, where a keypad exposes `135-0-18-0/1/9` but not `-18-7`. So the format is a blueprint option: **Entry/exit delay indicator format**, modern by default, legacy one click away. Also added: a zero-length delay no longer sends a pointless `0m0s` countdown. |
-| [#46](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/46) `property_key` docs outdated | — | **Fixed in docs** (same fix as PR #48). |
-| [#35](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/35) Volume low after a trigger | Keypad volume stays low after a siren; only re-pairing fixes it | **Optional workaround, off by default.** Nobody has ever diagnosed this and it may be firmware. Turn on **Re-assert announcement volume after an alarm** and the blueprint writes config parameter 4 back to your chosen value once the alarm goes triggered → disarmed. Off unless you actually see the problem. |
-| [#32](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/32) Keypad missing from the device picker | Device selector comes up empty | **Mitigated.** Upstream filters the picker on `manufacturer: Ring`, which fails when Z-Wave JS reports the device without a usable manufacturer string. This fork filters on `integration: zwave_js` only, so the keypad always appears — at the cost of listing every other Z-Wave device too. |
-| [#37](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/37) `extra keys not allowed @ data['automation']` | — | **Not a blueprint bug.** The reporter pasted a `configuration.yaml`-style `automation:` block into the UI editor, which expects the mapping without that key. Using the blueprint avoids the whole problem. |
-| [#38](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/38) Broken v1 import link | — | **Not applicable** (v1 keypad docs typo). |
-| [#27](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/27) How to map a button to night mode | — | **Answered by design.** The keypad has three mode keys (Disarm / Away / Home) and no night key; the hardware cannot send a fourth mode. This fork instead *reflects* `armed_night` on the Home LED, so arming night from HA still shows correctly on the keypad. |
-| [#42](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/42) Keypad not exposing all topics | One of two keypads lacks `135-0-18-7` | **Not a blueprint bug** — a Z-Wave interview problem. It is, however, the evidence behind the delay-format switch above. |
-| [#47](https://github.com/ImSorryButWho/HomeAssistantNotes/issues/47) Connectivity unstable | — | **Not a blueprint bug** — Z-Wave RF / mesh. |
-
-None of these 12 issues has a single reply from the maintainer, which is the
-clearest signal that forking was the right call.
-
----
-
-## Everything this fork changes
-
-Beyond the PR and issue fixes above:
-
-- **Modernised syntax** — `triggers:` / `actions:`, `- trigger: event`,
-  `action:` instead of the deprecated `service:`. This is what upstream PR #36
-  started; here it is applied consistently.
-- **Cancel key (`event_type: 25`) is handled.** Upstream ignores it entirely.
-  It now behaves like Ring's own keypad: cancel a running countdown, or clear a
-  panic alert.
-- **`not_from: [unknown, unavailable]` on every state trigger** instead of a
-  global "not from unknown" condition, so the keypad stays quiet on HA restart
-  and the intent is local to each trigger. Also covers `unavailable`, which
-  upstream missed.
-- **Pressing Enter when nothing is armed no longer fires a disarm.** Upstream
-  sent `alarmo.disarm` on every Enter press; with no code that makes Alarmo
-  emit `invalid_code`, so the keypad answers a harmless keypress with an error
-  tone. The disarm branch is now gated on the alarm not already being disarmed.
-- **`not_allowed` rejections get the error tone too.** Alarmo's third rejection
-  reason (arming a mode that is not enabled) was silent upstream.
-- **`armed_vacation` → Away LED, `armed_night` and `armed_custom_bypass` → Home
-  LED.** The keypad has no LED for these, so they ride on the closest one.
-- **Inputs are grouped into collapsible sections** (Devices / Behaviour /
-  Volume recovery / Panic actions), so the two things you must set are the only
-  two things you see.
-- **Arm modes can be switched from the keypad.** Pressing Away while armed
-  Home switches straight to Away and starts the exit delay. Alarmo always
-  allowed this — its arm handler is documented as "arm the alarm or switch
-  between arm modes" — but upstream gated its arm branch on `state: disarmed`,
-  so you had to disarm first. Configurable: to a stricter mode only (the
-  default), any switch, or off.
-- **The mode LED is re-asserted after a restart.** The keypad remembers its own
-  mode, and both upstream and this fork only write it when Alarmo *changes*
-  state — so a keypad that forgets (a power blip, a spell off the mesh) while
-  Alarmo sits in one state shows nothing until the next arm or disarm. A
-  re-sync branch re-states the settled state about a minute after HA starts,
-  and optionally every N hours. It only ever writes to the keypad; it never
-  arms, disarms or touches Alarmo, and it skips `arming`, `pending` and
-  `triggered` so it cannot wipe a countdown or re-fire the siren.
-- **Traces stay disabled** (`stored_traces: 0`), and now with a comment saying
-  why: a trace of this automation would write your PIN in clear text into
-  `.storage`. Raise it temporarily if you need to debug, then put it back.
-
-### Known trade-offs
-
-- The **Panic alert cleared** action also runs if you press Disarm + code while
-  already disarmed and no alert is active. Keep that action idempotent
-  (e.g. "turn the siren off"), which is the normal shape for it anyway.
-- Arming from the keypad still needs a Disarm/Cancel press to abandon a bypass
-  prompt, otherwise the confirmation window just times out silently.
-- The re-sync defaults to the **silent** form (voice volume 0), which is
-  confirmed working on the firmware tested so far but is not guaranteed
-  everywhere. If your mode LED never updates after a restart, turn **Re-sync
-  silently** off — the audible form is universally accepted.
-  [`docs/testing.md`](docs/testing.md) group H has a two-minute check that
-  tells the two apart.
-- The N-hourly re-sync is off by default even so: an N-hourly cycle always
-  includes midnight, and on a keypad that ignores the silent form that would be
-  an announcement in the middle of the night. Turn it on (6 is a good value)
-  once you have confirmed silence.
-
----
-
-## Versioning
-
-Home Assistant has no version field for blueprints and no update notification —
-`blueprint.version` is rejected outright by the schema, and the blueprint list
-shows names only, not descriptions. So the version goes in the **name**, the
-way other published blueprints do it:
-
-- `Ring Keypad v2 + Alarmo (v1.2.1)` — visible at a glance in
-  **Settings → Automations & scenes → Blueprints**
-- a comment at the top of the YAML, for anyone reading the file
-- a git tag in this repo, with [`CHANGELOG.md`](CHANGELOG.md) for the detail
-
-**To check which version you are running:** open Settings → Automations &
-scenes → Blueprints and read the number after the blueprint name.
-
-Renaming on each release is safe: Home Assistant identifies a blueprint by its
-file path, so existing automations keep working and simply show the new name.
-
-**To update:** ⋮ on the blueprint → **Re-import blueprint**. It re-fetches from
-`source_url`, so the new version has to be pushed here first. New inputs take
-their defaults automatically and your existing choices are kept; the changelog
-flags any release where that is not true.
-
-## Tracking upstream
-
-Upstream is dormant, not archived. To watch for movement:
-
-```bash
-git remote add upstream https://github.com/ImSorryButWho/HomeAssistantNotes.git
-git fetch upstream
-git log --oneline upstream/main -- keypad_blueprint.yaml
+```mermaid
+sequenceDiagram
+  participant K as Ring Keypad v2
+  participant B as Blueprint
+  participant A as Alarmo
+  K->>B: code + Away
+  B->>A: arm away (code)
+  alt armed
+    A-->>B: state: arming
+    B->>K: exit-delay countdown
+    A-->>B: state: armed_away
+    B->>K: "Away and armed"
+  else sensors open
+    A-->>B: failed to arm: open_sensors
+    B->>K: "Sensors require bypass"
+    K->>B: Enter or Away (within window)
+    B->>A: force-arm
+  else wrong code
+    A-->>B: failed to arm: invalid_code
+    B->>K: error tone
+  end
 ```
 
-GitHub's PR refs are fetchable directly, which is handy for reviewing a new
-pull request without the web UI:
+**Keypad → Alarmo**
 
-```bash
-git fetch upstream '+refs/pull/*/head:refs/remotes/upstream/pr/*'
-git diff upstream/main...upstream/pr/50
-```
+| You press | What happens |
+|---|---|
+| Code + **Away** / **Home** | Arms that mode, or switches to it if already armed (per your setting) |
+| Code + **Disarm**, **Cancel** or **Enter** while armed or counting down | Disarms |
+| **Disarm** / **Cancel** while disarmed | Clears a panic alert (needs a code by default) |
+| **Fire** / **Police** / **Medical**, held until the lights go out | Runs your action for that button |
 
----
+**Alarmo → keypad**
 
-## Validation
+| Alarmo state | Keypad |
+|---|---|
+| `disarmed` | Disarmed LED, "Disarmed" |
+| `arming` | Exit delay countdown |
+| `pending` | Entry delay countdown |
+| `armed_away`, `armed_vacation` | Away LED, "Away and armed" |
+| `armed_home`, `armed_night`, `armed_custom_bypass` | Home LED, "Home and armed" |
+| `triggered` | Siren |
 
-The blueprint was validated against **Home Assistant 2026.2.3** using HA's own
-schemas, not by eye:
+## Updating
 
-- `blueprint.schemas.BLUEPRINT_SCHEMA` — blueprint metadata, sections, selectors
-- input substitution via `BlueprintInputs.async_substitute()`
-- `cv.TRIGGER_SCHEMA` (20 triggers), `cv.SCRIPT_SCHEMA`, `cv.SCRIPT_VARIABLES_SCHEMA`
-- every Jinja template compiled through HA's own template engine
-- cross-checks: no orphan trigger ids, no branch referring to a nonexistent
-  trigger, no declared-but-unused inputs, no undeclared `!input`
-- the three computed variables (`entered_code`, `panic_cancel_requested`,
-  `delay_indicator_value`) rendered under 13 scenarios — numeric PIN, PIN with
-  a leading zero, bare keypress, both delay formats, a missing `delay`
-  attribute, and the post-siren volume-restore path
+Home Assistant doesn't notify you about blueprint updates. To hear about new
+versions, **Watch → Custom → Releases** on this repository.
 
-The one thing no static check can do is press the buttons.
-[`docs/testing.md`](docs/testing.md) is the manual pass: 25 checks across mode
-sync, countdowns, sensor bypass, panic buttons, the siren and an HA restart,
-plus which log to open when one of them fails.
+- **Which version am I on?** The version is in the blueprint's name under
+  **Settings → Automations & scenes → Blueprints**, e.g.
+  `Ring Keypad v2 + Alarmo (v1.2.1)`.
+- **To update:** ⋮ next to the blueprint → **Re-import blueprint**. Your
+  automation keeps its settings, and new options take their defaults.
+- Release notes are on the
+  [Releases](https://github.com/evancauteren/ring-keypad-alarmo-blueprint/releases)
+  page. Any release that needs you to check your settings says so.
 
-## Credit and licence
+## Known limitations
 
-Original work and all the Z-Wave reverse-engineering:
-[ImSorryButWho](https://github.com/ImSorryButWho/HomeAssistantNotes).
-Ideas taken from PRs by [alimac87](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/43),
-[olibos](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/36),
-[bharvey88](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/49) and
-[jsnallen](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/48).
+- **One keypad per automation.** You can create one automation per keypad, but
+  error tones and bypass prompts will sound on every keypad tied to the same
+  Alarmo panel. For a true multi-keypad setup, see bharvey88's
+  [multi-keypad blueprint](https://github.com/ImSorryButWho/HomeAssistantNotes/pull/49).
+- **No Night key.** The keypad has three mode keys. Night, Vacation and Custom
+  bypass can be armed from Home Assistant and are shown on the keypad, but
+  cannot be armed from it.
+- **The mode LED is dark most of the time.** That's the keypad's default
+  (parameter 22), not a sync problem. See
+  [keypad-reference.md](docs/keypad-reference.md#the-mode-led-is-off--did-the-sync-break).
+- **Panic alert cleared** also runs if you press Disarm + code while already
+  disarmed with no alert active. Keep that action safe to repeat, e.g. "turn
+  the siren off".
+- **Silent re-sync** works on the firmware tested so far but isn't guaranteed.
+  If the mode LED never updates after a restart, turn **Re-sync silently**
+  off. Leave the N-hourly re-sync off until you've confirmed silence, or it
+  may announce itself at midnight.
+- **Traces are disabled** (`stored_traces: 0`) on purpose: a trace would store
+  the PIN typed on the keypad in plain text in `.storage`.
 
-Upstream ships **no licence file**, so this fork claims none either: it is
-published in the same spirit the original was — notes and a blueprint shared
-for other people's Home Assistant setups — and every line of the Z-Wave
-groundwork is ImSorryButWho's. If you want to reuse this in something with a
-formal licence, ask them first.
+## Troubleshooting
 
-Issues and pull requests are welcome, though be aware the scope above is
-deliberately narrow.
+[`docs/testing.md`](docs/testing.md) is a full test plan, about 40 checks
+across arming, countdowns, bypass, panic buttons, the siren and restarts. For
+each one it says what to expect and where to look when it fails.
+
+The most common issue: arming announces itself but the light bar never counts.
+Switch **Entry/exit delay indicator format** to *Legacy*.
+
+## Contributing
+
+Bug reports and pull requests are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) first: the scope is deliberately narrow
+(one keypad, Alarmo).
+
+## Credits & license
+
+Based on [ImSorryButWho](https://github.com/ImSorryButWho/HomeAssistantNotes)'s
+original Ring Keypad v2 blueprint and Z-Wave research. Thanks to alimac87,
+olibos, bharvey88 and jsnallen, whose pull requests there shaped parts of this
+one. Coming from the original blueprint? See
+[docs/differences-from-original.md](docs/differences-from-original.md).
+
+The original project has no license, so this one doesn't claim one either. To
+reuse this work in a project with a formal license, please ask ImSorryButWho
+first.

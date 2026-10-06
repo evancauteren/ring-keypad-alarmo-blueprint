@@ -2,8 +2,7 @@
 
 Condensed and corrected from
 [ImSorryButWho's RingKeypadV2.md](https://github.com/ImSorryButWho/HomeAssistantNotes/blob/main/RingKeypadV2.md),
-with the `property_key` correction from upstream PR #48 / issue #46 and the
-config-parameter table taken from the
+with the config-parameter table taken from the
 [Z-Wave JS device file](https://github.com/zwave-js/zwave-js/blob/master/packages/config/config/devices/0x0346/keypad_v2.json)
 (manufacturer `0x0346`, label `4AK1SZ`).
 
@@ -37,8 +36,7 @@ The blueprint uses 2, 3, 5, 6, 16, 17, 19 and 25. Events 0 and 1 are noise.
 ### Modes, alarms and messages — `property_key: "1"`, `value` 0–99
 
 `value` is the brightness of the corresponding LED while switching modes.
-**99 is the maximum — 100 is out of range** (upstream fixed this in `7973a1e`;
-open PR #36 reintroduces the bug).
+**99 is the maximum — 100 is out of range.**
 
 | `property` | Effect |
 |---|---|
@@ -55,10 +53,10 @@ open PR #36 reintroduces the bug).
 
 ### Entry / exit delays — `property_key: "timeout"`
 
-**This is the part the upstream docs get wrong.** Current Z-Wave JS wants
+**Older guides get this wrong.** Current Z-Wave JS wants
 `property_key: "timeout"` and a duration string like `"1m30s"` — not
 `property_key: 7` with a number of seconds. Some keypads/older Z-Wave JS
-versions still expose the numeric key instead (issue #42), which is why the
+versions still expose the numeric key instead, which is why the
 blueprint makes the format selectable.
 
 | `property` | Effect |
@@ -77,7 +75,7 @@ blueprint makes the format selectable.
 | 100 | Ring doorbell chime |
 
 Property 13 with `property_key: "9"` is how the blueprint fires the siren at
-full volume on `triggered` (upstream PR #40).
+full volume on `triggered`.
 
 Combining property keys — a volume *and* a duration in one call — is not
 possible through `zwave_js.set_value`; it would need `zwave_js.invoke_cc_api`.

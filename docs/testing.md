@@ -2,8 +2,8 @@
 
 A run-through that exercises every branch in the automation. Roughly 30–40
 minutes if you do all of it. Groups A–C are the boring sanity checks; **group D
-is the one worth your attention**, because the sensor-bypass flow is the part
-that was broken upstream and is the most intricate logic here.
+is the one worth your attention**, because the sensor-bypass flow is the most
+intricate logic here.
 
 Before you start:
 
@@ -30,7 +30,7 @@ Legend: 🔊 means the keypad should speak or play a sound.
 | A3 | While armed: code + **Disarm** | 🔊 "Disarmed", Disarmed LED |
 | A4 | While armed: **wrong** code + **Disarm** | 🔊 soft error tone, stays armed |
 | A5 | While armed: bare **Enter**, no code | 🔊 soft error tone (Alarmo reports no code as an invalid code) |
-| A6 | While disarmed: bare **Enter**, no code | **Nothing at all.** Upstream answered this with a spurious error tone; the disarm branch is now gated on the alarm not already being disarmed |
+| A6 | While disarmed: bare **Enter**, no code | **Nothing at all.** The disarm branch is gated on the alarm not already being disarmed, so a stray Enter does not earn an error tone |
 
 If A4 or A5 stay silent, check in Developer tools → Events whether Alarmo is
 actually firing `alarmo_failed_to_arm` for a failed *disarm* on your version —
@@ -62,8 +62,8 @@ modes from the keypad's three mode keys.
 | C2 | Armed Away, open an entry door | Alarmo → `pending`, 🔊 "Entry delay started", bar counts **down**, length matches your **entry** delay |
 | C3 | Set that mode's exit delay to **0** in Alarmo, then arm | Arms instantly with **no** exit-delay announcement |
 
-C3 checks a small fix of ours: a zero delay used to be sent as a `0m0s`
-countdown, which makes the keypad announce a countdown that does not exist.
+C3 checks that a zero delay is skipped: sent as a `0m0s` countdown, it would
+make the keypad announce a countdown that does not exist.
 
 While C1/C2 run, watch **Developer tools → States** for your
 `alarm_control_panel.*` entity: the `delay` attribute is exactly what the
@@ -79,7 +79,7 @@ Open a door or window that Alarmo uses for arming, so arming will be refused.
 |---|---|---|
 | D1 | Code + **Away** with the door open | Does **not** arm. 🔊 "Sensors require bypass", **Enter** button blinks |
 | D2 | Then press **Enter** within 30 s | Force-arms anyway → 🔊 "Away and armed" |
-| D3 | Repeat D1, then code + **Enter** | Same result. Upstream only accepted a *bare* Enter, so retyping your code could never work — this is the actual bug from upstream issue #23 |
+| D3 | Repeat D1, then code + **Enter** | Same result. Retyping your code before Enter must work as well as a bare Enter |
 | D4 | Repeat D1, then press **Away** again | Also confirms — Arm counts as confirmation too |
 | D5 | Repeat D1, then press **Disarm** or **Cancel** | Abandons it. Stays disarmed, 🔊 "Disarmed" |
 | D6 | Repeat D1, then wait out the window | Nothing arms, nothing announced. Confirm the window length matches your **Bypass confirmation window** setting |
@@ -101,9 +101,6 @@ that event, and `entity_id` only appears in Alarmo v1.10.9 and later.
 | E5 | During an exit delay: code + **Cancel** | Countdown stops, Alarmo disarms |
 | E6 | Hold **Fire** (loud), then code + **Disarm** | Alert clears |
 
-E1–E4 are entirely new — upstream had no way to silence a manual panic alert
-at all, which is open issues #45 and #21.
-
 If the panic buttons do not fire at all, they need a genuine long hold. The
 threshold is Z-Wave config **parameter 7** (2–5 s, default 3). Lower it to 2 if
 three seconds feels wrong, or raise it to 5 to make accidents less likely.
@@ -116,7 +113,8 @@ three seconds feels wrong, or raise it to 5 to make accidents less likely.
 | F2 | Code + **Disarm** | Siren stops, 🔊 "Disarmed" |
 | F3 | Right after F2, press a few keys and arm again | Key tones and announcements should be at **normal** volume |
 
-F3 is the check for upstream issue #35. If everything sounds quiet afterwards,
+F3 checks for a keypad left at low volume after a siren. If everything sounds
+quiet afterwards,
 look at Z-Wave config **parameter 4** (Announcement Audio Volume) on the
 keypad — if it has been changed out from under you, turn on **Re-assert
 announcement volume after an alarm** in the blueprint and set the value to
@@ -134,7 +132,7 @@ G1 is the `not_from: [unknown, unavailable]` guard on every state trigger — HA
 publishes `unknown → armed_away` for the panel during startup, and without the
 guard the keypad announces itself on every restart. What you are checking is
 that nothing happens *at* startup; the deliberate re-sync a minute later is
-group H. G3 is upstream PR #43.
+group H. G3 is the `entity_id` filter on `alarmo_failed_to_arm`.
 
 ## H. Mode re-sync
 
@@ -145,7 +143,7 @@ anyway.
 | # | Do this | Expect |
 |---|---|---|
 | H1 | With Alarmo disarmed, restart Home Assistant and wait ~90 s | The Disarmed key is lit again, in silence (**Re-sync silently** is on by default). With that option off it also 🔊 says "Disarmed" |
-| H1b | After H1, check **Settings → System → Logs** for this automation | **No** `Error rendering variables` entry. That error aborts the run before any action, so it is the difference between the re-sync working and silently never running — it is how the v1.2.0 bug hid |
+| H1b | After H1, check **Settings → System → Logs** for this automation | **No** `Error rendering variables` entry. That error aborts the run before any action, so it is the difference between the re-sync working and silently never running |
 | H2 | Arm Away, restart HA, wait ~90 s | Away is re-asserted, not Disarmed |
 | H3 | Start an exit delay, restart HA mid-countdown | The re-sync **skips** it — no mode is written over the countdown, because `arming` is not a settled state |
 | H4 | Set **Also re-sync every N hours** to 1 and wait for the top of the hour | The mode is re-asserted. Leave it at 1 only for the test; 6 is the sensible standing value |
@@ -222,8 +220,7 @@ the driver" from "accepted but ignored by the keypad".
 
 There is a guaranteed fallback that uses only documented config parameters:
 drop **parameter 4** (Announcement Audio Volume) to 0, send the normal
-`property_key: "1"` indicator, then put parameter 4 back. Upstream PR #36 uses
-exactly this sandwich for its night mode. It costs two extra Z-Wave writes per
+`property_key: "1"` indicator, then put parameter 4 back. It costs two extra Z-Wave writes per
 re-sync and leaves a brief window where an unrelated announcement would also be
 muted, which is why it is not the default — but it works on any firmware.
 
@@ -247,7 +244,7 @@ With the default **to a stricter mode only**:
 | I6 | Arm Home with a door open that Away does not tolerate, then code + **Away** | 🔊 "Sensors require bypass". Confirm with Enter to force the switch; let it time out and Alarmo reverts to **armed Home**, not disarmed |
 
 Set the option to **any mode switch** and I2 should then work. Set it to
-**none** and I1 should stop working, which is the upstream behaviour.
+**none** and I1 should stop working.
 
 I6 is worth doing once: it proves Alarmo's `_revert_state` handling, i.e. that
 a failed mode switch leaves you armed rather than dropping the alarm.
@@ -324,7 +321,7 @@ light bar never counts, switch **Entry/exit delay indicator format** to
 
 To tell which one your keypad wants, look at its entities in Z-Wave JS. A
 keypad that exposes `135-0-18-7` wants the legacy numeric key; one that exposes
-only `135-0-18-0/1/9` wants `timeout`. This is upstream issues #42 and #44.
+only `135-0-18-0/1/9` wants `timeout`.
 
 ## What to report if something fails
 
